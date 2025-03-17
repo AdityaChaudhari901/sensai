@@ -27,7 +27,7 @@ import html2pdf from "html2pdf.js/dist/html2pdf.min.js";
 
 export default function ResumeBuilder({ initialContent }) {
   const [activeTab, setActiveTab] = useState("edit");
-  const [previewContent, setPreviewContent] = useState(initialContent || "");
+  const [previewContent, setPreviewContent] = useState(initialContent);
   const { user } = useUser();
   const [resumeMode, setResumeMode] = useState("preview");
 
@@ -56,20 +56,29 @@ export default function ResumeBuilder({ initialContent }) {
     error: saveError,
   } = useFetch(saveResume);
 
+  // Watch form fields for preview updates
   const formValues = watch();
 
   useEffect(() => {
     if (initialContent) setActiveTab("preview");
   }, [initialContent]);
 
+  // Update preview content when form values change
   useEffect(() => {
-    const newContent = getCombinedContent();
-    setPreviewContent(newContent || initialContent || "");
-  }, [formValues]);
+    if (activeTab === "edit") {
+      const newContent = getCombinedContent();
+      setPreviewContent(newContent ? newContent : initialContent);
+    }
+  }, [formValues, activeTab]);
 
+  // Handle save result
   useEffect(() => {
-    if (saveResult && !isSaving) toast.success("Resume saved successfully!");
-    if (saveError) toast.error(saveError.message || "Failed to save resume");
+    if (saveResult && !isSaving) {
+      toast.success("Resume saved successfully!");
+    }
+    if (saveError) {
+      toast.error(saveError.message || "Failed to save resume");
+    }
   }, [saveResult, saveError, isSaving]);
 
   const getContactMarkdown = () => {
@@ -77,10 +86,13 @@ export default function ResumeBuilder({ initialContent }) {
     const parts = [];
     if (contactInfo.email) parts.push(`📧 ${contactInfo.email}`);
     if (contactInfo.mobile) parts.push(`📱 ${contactInfo.mobile}`);
-    if (contactInfo.linkedin) parts.push(`💼 [LinkedIn](${contactInfo.linkedin})`);
+    if (contactInfo.linkedin)
+      parts.push(`💼 [LinkedIn](${contactInfo.linkedin})`);
     if (contactInfo.twitter) parts.push(`🐦 [Twitter](${contactInfo.twitter})`);
+
     return parts.length > 0
-      ? `## <div align="center">${user?.fullName || "Your Name"}</div>\n\n<div align="center">\n${parts.join(" | ")}\n</div>`
+      ? `## <div align="center">${user.fullName}</div>
+        \n\n<div align="center">\n\n${parts.join(" | ")}\n\n</div>`
       : "";
   };
 
@@ -104,19 +116,17 @@ export default function ResumeBuilder({ initialContent }) {
     setIsGenerating(true);
     try {
       const element = document.getElementById("resume-pdf");
-      if (!element) throw new Error("Resume content not found");
       const opt = {
         margin: [15, 15],
-        filename: `${user?.fullName || "resume"}.pdf`,
+        filename: "resume.pdf",
         image: { type: "jpeg", quality: 0.98 },
         html2canvas: { scale: 2 },
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
       };
+
       await html2pdf().set(opt).from(element).save();
-      toast.success("PDF generated successfully!");
     } catch (error) {
       console.error("PDF generation error:", error);
-      toast.error("Failed to generate PDF");
     } finally {
       setIsGenerating(false);
     }
@@ -124,20 +134,30 @@ export default function ResumeBuilder({ initialContent }) {
 
   const onSubmit = async (data) => {
     try {
-      const formattedContent = previewContent.trim();
-      await saveResumeFn(formattedContent);
+      const formattedContent = previewContent
+        .replace(/\n/g, "\n") // Normalize newlines
+        .replace(/\n\s*\n/g, "\n\n") // Normalize multiple newlines to double newlines
+        .trim();
+
+      console.log(previewContent, formattedContent);
+      await saveResumeFn(previewContent);
     } catch (error) {
       console.error("Save error:", error);
-      toast.error("Failed to save resume");
     }
   };
 
   return (
     <div data-color-mode="light" className="space-y-4">
       <div className="flex flex-col md:flex-row justify-between items-center gap-2">
-        <h1 className="font-bold gradient-title text-5xl md:text-6xl">Resume Builder</h1>
+        <h1 className="font-bold gradient-title text-5xl md:text-6xl">
+          Resume Builder
+        </h1>
         <div className="space-x-2">
-          <Button variant="destructive" onClick={handleSubmit(onSubmit)} disabled={isSaving}>
+          <Button
+            variant="destructive"
+            onClick={handleSubmit(onSubmit)}
+            disabled={isSaving}
+          >
             {isSaving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -145,7 +165,7 @@ export default function ResumeBuilder({ initialContent }) {
               </>
             ) : (
               <>
-                <Save className="mr-2 h-4 w-4" />
+                <Save className="h-4 w-4" />
                 Save
               </>
             )}
@@ -153,12 +173,12 @@ export default function ResumeBuilder({ initialContent }) {
           <Button onClick={generatePDF} disabled={isGenerating}>
             {isGenerating ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 Generating PDF...
               </>
             ) : (
               <>
-                <Download className="mr-2 h-4 w-4" />
+                <Download className="h-4 w-4" />
                 Download PDF
               </>
             )}
@@ -187,7 +207,9 @@ export default function ResumeBuilder({ initialContent }) {
                     error={errors.contactInfo?.email}
                   />
                   {errors.contactInfo?.email && (
-                    <p className="text-sm text-red-500">{errors.contactInfo.email.message}</p>
+                    <p className="text-sm text-red-500">
+                      {errors.contactInfo.email.message}
+                    </p>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -198,7 +220,9 @@ export default function ResumeBuilder({ initialContent }) {
                     placeholder="+1 234 567 8900"
                   />
                   {errors.contactInfo?.mobile && (
-                    <p className="text-sm text-red-500">{errors.contactInfo.mobile.message}</p>
+                    <p className="text-sm text-red-500">
+                      {errors.contactInfo.mobile.message}
+                    </p>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -209,18 +233,24 @@ export default function ResumeBuilder({ initialContent }) {
                     placeholder="https://linkedin.com/in/your-profile"
                   />
                   {errors.contactInfo?.linkedin && (
-                    <p className="text-sm text-red-500">{errors.contactInfo.linkedin.message}</p>
+                    <p className="text-sm text-red-500">
+                      {errors.contactInfo.linkedin.message}
+                    </p>
                   )}
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Twitter/X Profile</label>
+                  <label className="text-sm font-medium">
+                    Twitter/X Profile
+                  </label>
                   <Input
                     {...register("contactInfo.twitter")}
                     type="url"
                     placeholder="https://twitter.com/your-handle"
                   />
                   {errors.contactInfo?.twitter && (
-                    <p className="text-sm text-red-500">{errors.contactInfo.twitter.message}</p>
+                    <p className="text-sm text-red-500">
+                      {errors.contactInfo.twitter.message}
+                    </p>
                   )}
                 </div>
               </div>
@@ -281,7 +311,9 @@ export default function ResumeBuilder({ initialContent }) {
                 )}
               />
               {errors.experience && (
-                <p className="text-sm text-red-500">{errors.experience.message}</p>
+                <p className="text-sm text-red-500">
+                  {errors.experience.message}
+                </p>
               )}
             </div>
 
@@ -300,7 +332,9 @@ export default function ResumeBuilder({ initialContent }) {
                 )}
               />
               {errors.education && (
-                <p className="text-sm text-red-500">{errors.education.message}</p>
+                <p className="text-sm text-red-500">
+                  {errors.education.message}
+                </p>
               )}
             </div>
 
@@ -319,7 +353,9 @@ export default function ResumeBuilder({ initialContent }) {
                 )}
               />
               {errors.projects && (
-                <p className="text-sm text-red-500">{errors.projects.message}</p>
+                <p className="text-sm text-red-500">
+                  {errors.projects.message}
+                </p>
               )}
             </div>
           </form>
@@ -331,16 +367,18 @@ export default function ResumeBuilder({ initialContent }) {
               variant="link"
               type="button"
               className="mb-2"
-              onClick={() => setResumeMode(resumeMode === "preview" ? "edit" : "preview")}
+              onClick={() =>
+                setResumeMode(resumeMode === "preview" ? "edit" : "preview")
+              }
             >
               {resumeMode === "preview" ? (
                 <>
-                  <Edit className="mr-2 h-4 w-4" />
+                  <Edit className="h-4 w-4" />
                   Edit Resume
                 </>
               ) : (
                 <>
-                  <Monitor className="mr-2 h-4 w-4" />
+                  <Monitor className="h-4 w-4" />
                   Show Preview
                 </>
               )}
@@ -351,7 +389,7 @@ export default function ResumeBuilder({ initialContent }) {
             <div className="flex p-3 gap-2 items-center border-2 border-yellow-600 text-yellow-600 rounded mb-2">
               <AlertTriangle className="h-5 w-5" />
               <span className="text-sm">
-                You will lose edited markdown if you update the form data.
+                You will lose editied markdown if you update the form data.
               </span>
             </div>
           )}
@@ -367,7 +405,10 @@ export default function ResumeBuilder({ initialContent }) {
             <div id="resume-pdf">
               <MDEditor.Markdown
                 source={previewContent}
-                style={{ background: "white", color: "black" }}
+                style={{
+                  background: "white",
+                  color: "black",
+                }}
               />
             </div>
           </div>
